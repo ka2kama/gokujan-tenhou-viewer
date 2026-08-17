@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Worker 名 = workers.dev のサブドメイン。公開 URL には製品名を含めない方針。
+  "name": "paifu-viewer",
+  // ランタイム（workerd 1.20260811.x）がサポートする最新日。
+  // 更新する場合は node_modules/workerd のバージョン（1.YYYYMMDD.x）を超えないこと。
+  "compatibility_date": "2026-08-11",
+  "assets": {
+    "directory": "./public"
+  },
+  // 公開は Custom Domain のみ。workers.dev URL は動作確認後に無効化済み。
+  "workers_dev": false,
+  "routes": [
+    {
+      "pattern": "paifu.ka2kama.com",
+      "custom_domain": true
+    }
+  ]
+}
