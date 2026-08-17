@@ -53,14 +53,15 @@
 ```text
 gokujan-tenhou-viewer/
 ├─ public/
-│  └─ index.html   … アプリ本体（HTML / CSS / JS を含む単一ファイル）
+│  ├─ index.html   … アプリ本体（HTML / CSS / JS を含む単一ファイル）
+│  └─ img/         … 使い方のスクリーンショット
 ├─ package.json    … wrangler と dev / deploy スクリプト
 ├─ wrangler.jsonc  … Cloudflare Workers Static Assets の設定
 ├─ LICENSE
 └─ README.md
 ```
 
-ビルドステップはありません。`public/index.html` が唯一の成果物で、外部 CDN への依存もありません。
+ビルドステップはありません。アプリのロジックは `public/index.html` の単一ファイルに収まっており、外部 CDN への依存もありません。
 
 ### ローカル実行
 

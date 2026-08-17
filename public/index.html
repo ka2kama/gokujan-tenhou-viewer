@@ -280,6 +280,37 @@
       font-weight: 600;
     }
 
+    /* 取得手順のスクリーンショット（折りたたみ） */
+    .howto { margin-top: 10px; }
+
+    .howto summary {
+      display: inline-block;
+      cursor: pointer;
+      color: var(--accent-strong);
+      font-size: .8rem;
+      font-weight: 650;
+    }
+
+    .howto summary:hover { text-decoration: underline; }
+
+    .howto-step { margin: 12px 0 0; }
+
+    .howto-step figcaption {
+      color: var(--text-soft);
+      font-size: .8rem;
+      font-weight: 650;
+    }
+
+    .howto img {
+      display: block;
+      margin-top: 8px;
+      width: 100%;
+      max-width: 340px;
+      height: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+    }
+
     textarea {
       width: 100%;
       min-height: 230px;
@@ -794,6 +825,19 @@
           <div class="path-hint" aria-label="牌譜JSONの取得手順">
             <span>対局履歴</span><b>→</b><span>…</span><b>→</b><span>牌譜JSONをコピー</span>
           </div>
+          <details class="howto">
+            <summary>取得手順を画像で見る</summary>
+            <figure class="howto-step">
+              <figcaption>1. メニューから「対局履歴」を開く</figcaption>
+              <img src="img/howto-1-history.webp" width="720" height="742" loading="lazy" decoding="async"
+                alt="極雀のメニュー画面。赤枠で示した「対局履歴」を開く" />
+            </figure>
+            <figure class="howto-step">
+              <figcaption>2. 対局カードの ①「…」を押し、②「牌譜JSONをコピー」を選ぶ</figcaption>
+              <img src="img/howto-2-copy-json.webp" width="720" height="893" loading="lazy" decoding="async"
+                alt="極雀の対局履歴画面。① 対局カードの「…」ボタンを押してメニューを開き、②「牌譜JSONをコピー」を選ぶ" />
+            </figure>
+          </details>
         </div>
       </div>
 
