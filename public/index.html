@@ -2047,15 +2047,12 @@
         return SEAT_LABELS[index] ?? `席${index + 1}`;
       }
 
-      function currentSeatLabel(kyoku, playerIndex) {
-        const dealer = ((Number(kyoku) % 4) + 4) % 4;
-        const relative = ((Number(playerIndex) - dealer) + 4) % 4;
-        return SEAT_LABELS[relative] ?? `席${Number(playerIndex) + 1}`;
-      }
-
-      function playerRoundLabel(names, playerIndex, kyoku) {
+      // 席は対局開始時の席で固定表示する（視点セレクタと同じ基準）。
+      // 局ごとの風で表示すると、同名プレイヤー（AI が複数など）を局をまたいで
+      // 追跡できなくなるため。親は局名と得点表記（∀）から読み取れる。
+      function playerRoundLabel(names, playerIndex) {
         const playerName = String(names?.[playerIndex] ?? "").trim();
-        const seat = currentSeatLabel(kyoku, playerIndex);
+        const seat = startingSeatLabel(playerIndex);
         return playerName ? `${playerName}（${seat}）` : seat;
       }
 
@@ -2198,7 +2195,7 @@
                 const winner = document.createElement("div");
                 winner.className = "winner-summary";
                 const winnerName = document.createElement("strong");
-                winnerName.textContent = playerRoundLabel(names, a.winner, kyoku);
+                winnerName.textContent = playerRoundLabel(names, a.winner);
                 const winMethod = document.createElement("span");
                 winMethod.className = "win-method";
                 winMethod.textContent = a.tsumo ? "ツモ" : "ロン";
