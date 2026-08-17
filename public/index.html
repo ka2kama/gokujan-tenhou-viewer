@@ -70,7 +70,7 @@
       justify-content: space-between;
       gap: 16px;
       min-height: 42px;
-      margin-bottom: 42px;
+      margin-bottom: 28px;
     }
 
     .brand {
@@ -97,26 +97,9 @@
       letter-spacing: -.03em;
     }
 
-    .unofficial {
-      color: var(--muted-2);
-      font-size: .76rem;
-      font-weight: 650;
-    }
-
     .hero {
       max-width: 790px;
       margin-bottom: 26px;
-    }
-
-    .eyebrow {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 14px;
-      color: var(--accent-strong);
-      font-size: .76rem;
-      font-weight: 820;
-      letter-spacing: .02em;
     }
 
     h1 {
@@ -250,16 +233,6 @@
       justify-content: space-between;
       gap: 20px;
       margin-bottom: 16px;
-    }
-
-    .section-kicker {
-      display: block;
-      margin-bottom: 5px;
-      color: var(--muted-2);
-      font-size: .72rem;
-      font-weight: 780;
-      letter-spacing: .08em;
-      text-transform: uppercase;
     }
 
     h2 {
@@ -754,7 +727,6 @@
 
     @media (max-width: 820px) {
       .app-shell { width: min(100% - 22px, 980px); padding-top: 18px; }
-      .topbar { margin-bottom: 30px; }
       .panel { padding: 18px; }
       .round { grid-template-columns: 1fr; gap: 9px; }
       .round-actions { justify-content: flex-start; }
@@ -764,8 +736,6 @@
 
     @media (max-width: 560px) {
       .app-shell { width: calc(100% - 18px); padding-bottom: 34px; }
-      .topbar { margin-bottom: 26px; }
-      .unofficial { display: none; }
       .hero { margin-bottom: 20px; padding: 0 5px; }
       h1 { font-size: clamp(1.9rem, 10vw, 2.55rem); }
       .hero-copy { font-size: .92rem; line-height: 1.75; }
@@ -800,16 +770,15 @@
   <main class="app-shell">
     <div class="topbar">
       <div class="brand"><span class="brand-mark">牌譜</span><span>極雀 → 天鳳牌譜ビューア</span></div>
-      <span class="unofficial">非公式ツール</span>
     </div>
 
     <header class="hero">
-      <div class="eyebrow">GOKUJAN → TENHOU</div>
       <h1>極雀 → 天鳳牌譜ビューア</h1>
       <p class="hero-copy">
         <span class="copy-line">極雀（旧 BigCoach）のAI対戦牌譜を、天鳳の牌譜ビューアで再生します。</span>
         <span class="copy-line">不足している和了情報は、対局内容から判定できる範囲で補完します。</span>
         <span class="copy-line copy-note">※ 四人麻雀の牌譜専用です（三人麻雀には対応していません）。</span>
+        <span class="copy-line copy-note">※ 極雀・天鳳とは無関係の非公式ツールです。</span>
       </p>
       <div class="hero-meta">
         <a class="source-link" href="https://review.bigcoach.work/account/live-games" target="_blank" rel="noopener noreferrer">極雀の対局履歴を開く <span aria-hidden="true">↗</span></a>
@@ -820,7 +789,6 @@
     <section class="panel" id="inputPanel">
       <div class="panel-head">
         <div>
-          <span class="section-kicker">牌譜JSON</span>
           <h2>牌譜JSONを読み込む</h2>
           <p class="panel-sub">極雀の対局履歴で「牌譜JSONをコピー」を選び、コピーした内容を貼り付けます。</p>
           <div class="path-hint" aria-label="牌譜JSONの取得手順">
@@ -848,7 +816,6 @@
     <section class="panel" id="resultPanel" hidden>
       <div class="panel-head">
         <div>
-          <span class="section-kicker">対局</span>
           <h2>局一覧</h2>
           <p class="panel-sub">視点を選び、見たい局を天鳳の牌譜ビューアで開きます。</p>
         </div>

@@ -2,7 +2,7 @@
 
 極雀（旧 BigCoach）の AI 対戦牌譜 JSON を読み込み、不足している和了情報を可能な範囲で補完して、局ごとに[天鳳の牌譜ビューア](https://tenhou.net/5/)で再生する静的 Web アプリです。
 
-入力は天鳳 JSON 形式（tenhou.net/6 形式）で、この形式であれば極雀以外のツールが出力した牌譜も読み込めます。**四人麻雀の牌譜専用**です（三人麻雀には対応していません）。
+入力は天鳳系ツールで広く使われる JSON 牌譜形式（`{title, name, rule, log}` 構造、通称 tenhou.net/6 形式）の生 JSON です。再生 URL の `#json=` に付く文字列はこれを URL エンコードしたもので、中身は同じデータです（貼り付ける際はデコード済みのものを使います）。この形式であれば極雀以外のツールが出力した牌譜も読み込めます。**四人麻雀の牌譜専用**です（三人麻雀には対応していません）。
 
 極雀・天鳳とは無関係の非公式ツールです。
 
@@ -76,9 +76,7 @@ npx wrangler login   # 初回のみ（ブラウザで Cloudflare にログイン
 npm run deploy
 ```
 
-デプロイ後は `https://paifu-viewer.<subdomain>.workers.dev` で公開されます。
-
-独自ドメインを使う場合は、対象ドメインの zone が Cloudflare で有効であることを確認したうえで、`wrangler.jsonc` 内のコメントアウトされた `routes`（Custom Domain 設定）を有効化して再デプロイします。独自ドメインへの移行後は `workers_dev: false` で workers.dev 側の URL を無効化します。
+デプロイ後は `https://paifu.ka2kama.com`（Custom Domain）で公開されます。workers.dev 側の URL は `wrangler.jsonc` の `workers_dev: false` で無効化しています。
 
 ## 開発方針
 
