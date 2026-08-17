@@ -145,6 +145,12 @@
     .hero-copy .copy-line { display: block; }
     .hero-copy .copy-line + .copy-line { margin-top: 3px; }
 
+    /* 本文より一段控えめに表示する注釈行 */
+    .hero-copy .copy-note {
+      color: var(--muted);
+      font-size: .88em;
+    }
+
     .hero-meta {
       display: flex;
       flex-wrap: wrap;
@@ -803,6 +809,7 @@
       <p class="hero-copy">
         <span class="copy-line">極雀（旧 BigCoach）のAI対戦牌譜を、天鳳の牌譜ビューアで再生します。</span>
         <span class="copy-line">不足している和了情報は、対局内容から判定できる範囲で補完します。</span>
+        <span class="copy-line copy-note">※ 四人麻雀の牌譜専用です（三人麻雀には対応していません）。</span>
       </p>
       <div class="hero-meta">
         <a class="source-link" href="https://review.bigcoach.work/account/live-games" target="_blank" rel="noopener noreferrer">極雀の対局履歴を開く <span aria-hidden="true">↗</span></a>
@@ -1752,6 +1759,17 @@
         };
       }
 
+      // 喰いタンの有効判定。明示指定（rule.kuitan）が最優先。ルール文字列（disp）が
+      // ある場合はその宣言（「喰」の有無）に従う。どちらの情報もない牌譜は、
+      // 現代ルールの標準である喰いタンありとみなす。
+      function kuitanEnabled(rule) {
+        if (rule?.kuitan === 1) return true;
+        if (rule?.kuitan === 0) return false;
+        const disp = String(rule?.disp || '');
+        if (disp) return disp.includes('喰');
+        return true;
+      }
+
       function evaluateAgari(round, detail, delta, rule) {
         const winner = Number(detail?.[0]);
         const from = Number(detail?.[1] ?? winner);
@@ -1785,7 +1803,7 @@
         const doubleRiichi = inferDoubleRiichi(round, states, winnerState);
         const ippatsu = inferIppatsu(round, states, winnerState, fromState, tsumo, situ);
         const firstTurn = inferFirstTurnYakuman(round, states, winnerState, tsumo);
-        const kuitan = String(rule?.disp || '').includes('喰') || rule?.kuitan === 1;
+        const kuitan = kuitanEnabled(rule);
 
         const ctx = {
           round, winner, from, tsumo, winnerState, melds: winnerState.melds,
@@ -1994,6 +2012,24 @@
           const delta = result[i];
           const detail = result[i + 1];
           if (!Array.isArray(delta) || !Array.isArray(detail)) continue;
+
+          // 得点・役が揃っている和了（[winner, from, pao, 得点表記, 役...]）は
+          // 元データをそのまま使用する。補完・再計算は不足している場合のみ。
+          if (detail.length >= 5) {
+            const winner = Number(detail[0]);
+            const from = Number(detail[1] ?? winner);
+            analyses.push({
+              ok: true,
+              type: 'original',
+              winner,
+              tsumo: winner === from,
+              scoreText: String(detail[3]),
+              yakuStrings: detail.slice(4).map(String),
+              match: true
+            });
+            continue;
+          }
+
           const analysis = evaluateAgari(cloned, detail, delta, rule);
           analyses.push(analysis);
           if (analysis.ok) {
