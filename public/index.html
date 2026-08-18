@@ -1636,13 +1636,87 @@
         return event.index * 4 + turnOrderOffset(round, seat);
       }
 
+      // 牌譜の per-player 配列から実際の手番進行を模擬し、全イベントの大域順序を
+      // 復元する。鳴きがあると各プレイヤーのローカル index が巡目からずれるため、
+      // eventTurnKey の「index = 巡目」近似では順序判定（一発・両立直）を誤る。
+      // 戻り値は `席:行index:部(0=ツモ側,1=打牌側)` → 大域連番 の Map。
+      // 復元に失敗・曖昧な場合は null を返し、呼び出し側は近似にフォールバックする。
+      function sequenceRound(round) {
+        const kyoku = Number(round?.[ROUND_FIELD.META]?.[0] || 0);
+        const dealer = ((kyoku % 4) + 4) % 4;
+        const draws = SEATS.map(s => Array.isArray(round?.[5 + s * 3]) ? round[5 + s * 3] : []);
+        const discards = SEATS.map(s => Array.isArray(round?.[6 + s * 3]) ? round[6 + s * 3] : []);
+        const cursor = [0, 0, 0, 0];
+        const lastDrawn = [null, null, null, null];
+        const order = new Map();
+        const totalRows = SEATS.reduce((a, s) => a + Math.max(draws[s].length, discards[s].length), 0);
+        let seq = 0;
+        let current = dealer;
+
+        // 鳴きトークンのマーカー位置から鳴いた相手の席を求める。
+        // チーは常に上家。ポンはマーカー前の牌数が 0=上家 / 1=対面 / 2=下家。
+        const meldSourceSeat = (seat, meld) => {
+          if (meld.type === 'chi') return (seat + 3) % 4;
+          return (seat + [3, 2, 1][Math.min(meld.calledIndex, 2)]) % 4;
+        };
+
+        for (let guard = 0; guard <= totalRows + 8; guard++) {
+          const s = current;
+          const i = cursor[s];
+          const hasDraw = i < draws[s].length;
+          const hasDiscard = i < discards[s].length;
+          if (!hasDraw && !hasDiscard) return order; // 手番が来たが行がない = 終局
+
+          if (hasDraw) {
+            const tok = draws[s][i];
+            if (typeof tok === 'number') lastDrawn[s] = tok;
+            order.set(`${s}:${i}:0`, seq++);
+          }
+          if (!hasDiscard) return order; // ツモ和了など、打牌なしで終局
+
+          const tok = discards[s][i];
+          cursor[s] = i + 1;
+          order.set(`${s}:${i}:1`, seq++);
+
+          if (typeof tok === 'string' && !/^r\d{2}$/.test(tok)) {
+            continue; // 打牌の代わりの槓宣言（暗槓・加槓）→ 嶺上ツモで同じ手番が続く
+          }
+
+          // 通常の打牌。次の手番は下家か、この牌を鳴いたプレイヤー。
+          let discarded = null;
+          if (typeof tok === 'number') discarded = tok === 60 ? lastDrawn[s] : tok;
+          else discarded = Number(tok.slice(1)); // rNN
+
+          let next = (s + 1) % 4;
+          if (discarded != null) {
+            const want = normalizeTileCode(discarded);
+            const callers = [];
+            for (const s2 of SEATS) {
+              if (s2 === s) continue;
+              const t2 = draws[s2]?.[cursor[s2]];
+              if (typeof t2 !== 'string' || /^r\d{2}$/.test(t2)) continue;
+              const meld = parseMeldToken(t2);
+              if (!meld || !meld.open) continue; // 暗槓は他家の打牌を取らない
+              if (normalizeTileCode(meld.codes[meld.calledIndex]) !== want) continue;
+              // チー・ポンは鳴き元の席も突合する（明槓は 4 枚同一牌なので牌一致で十分）
+              if (meld.type !== 'kan' && meldSourceSeat(s2, meld) !== s) continue;
+              callers.push(s2);
+            }
+            if (callers.length > 1) return null; // 曖昧: 復元失敗
+            if (callers.length === 1) next = callers[0];
+          }
+          current = next;
+        }
+        return null; // ガード超過 = 復元失敗
+      }
+
       // Ippatsu lasts from the riichi discard until the player's next turn,
       // and is cancelled by any chi/pon/kan.  Tenhou's per-player arrays do
       // not carry a single global timestamp, so we map each local turn index
       // onto dealer-relative turn order.  Calls are represented as meld events
       // in the caller's next turn slot, which is sufficient for this one-turn
       // window.  Rinshan/chankan are rejected separately below.
-      function inferIppatsu(round, states, winnerState, fromState, tsumo, situ) {
+      function inferIppatsu(round, states, winnerState, fromState, tsumo, situ, order) {
         if (!winnerState?.riichi || winnerState.riichiDiscardIndex < 0) return false;
         if (situ?.rinshan) return false;
 
@@ -1650,6 +1724,45 @@
           e => e.kind === 'discard' && e.riichi
         );
         if (!riichiEvent) return false;
+
+        // 大域順序が復元できている場合は、近似ではなく実際の進行順で判定する
+        if (order) {
+          const seqOf = (seat, part, index) => order.get(`${seat}:${index}:${part}`);
+          const riichiSeq = seqOf(winnerState.seat, 1, winnerState.riichiDiscardIndex);
+          let winSeq = null;
+          let robbed = null;
+          if (tsumo) {
+            const lastDraw = [...winnerState.events].reverse().find(e => e.kind === 'draw');
+            if (lastDraw) winSeq = seqOf(winnerState.seat, 0, lastDraw.index);
+          } else if (fromState) {
+            if (situ?.chankan) {
+              robbed = [...fromState.events].reverse().find(e => e.kind === 'meld' && e.meld?.added);
+              if (robbed) winSeq = seqOf(fromState.seat, robbed.source === 'draw' ? 0 : 1, robbed.index);
+            } else {
+              const winDiscard = [...fromState.events].reverse().find(e => e.kind === 'discard');
+              if (winDiscard) winSeq = seqOf(fromState.seat, 1, winDiscard.index);
+            }
+          }
+          if (riichiSeq != null && winSeq != null) {
+            if (winSeq <= riichiSeq) return false;
+            // 立直後、和了までに自分のツモ番が挟まっていたら一発ではない
+            for (const e of winnerState.events) {
+              if (e.kind !== 'draw') continue;
+              const sq = seqOf(winnerState.seat, 0, e.index);
+              if (sq != null && sq > riichiSeq && sq < winSeq) return false;
+            }
+            // 立直と和了の間に成立した鳴き・槓は一発を消す（槍槓の対象槓は除く）
+            for (const state of states) {
+              for (const e of state.events) {
+                if (e.kind !== 'meld' || e === robbed) continue;
+                const sq = seqOf(state.seat, e.source === 'draw' ? 0 : 1, e.index);
+                if (sq != null && sq > riichiSeq && sq <= winSeq) return false;
+              }
+            }
+            return true;
+          }
+          // 必要なキーが引けない場合のみ、以降の近似判定へフォールバック
+        }
 
         const riichiKey = eventTurnKey(round, winnerState.seat, riichiEvent);
         const nextWinnerTurnKey = (winnerState.riichiDiscardIndex + 1) * 4 +
@@ -1699,10 +1812,27 @@
         return true;
       }
 
-      function inferDoubleRiichi(round, states, winnerState) {
+      function inferDoubleRiichi(round, states, winnerState, order) {
         if (!winnerState?.riichi || winnerState.riichiDiscardIndex !== 0) return false;
         const riichiEvent = winnerState.events.find(e => e.kind === 'discard' && e.riichi);
         if (!riichiEvent) return false;
+
+        // 大域順序が復元できている場合は実際の進行順で判定する
+        if (order) {
+          const seqOf = (seat, part, index) => order.get(`${seat}:${index}:${part}`);
+          const riichiSeq = seqOf(winnerState.seat, 1, 0);
+          if (riichiSeq != null) {
+            for (const state of states) {
+              for (const e of state.events) {
+                if (e.kind !== 'meld') continue;
+                const sq = seqOf(state.seat, e.source === 'draw' ? 0 : 1, e.index);
+                if (sq == null || sq < riichiSeq) return false;
+              }
+            }
+            return true;
+          }
+        }
+
         const riichiKey = eventTurnKey(round, winnerState.seat, riichiEvent);
         if (riichiKey == null) return false;
 
@@ -1807,8 +1937,9 @@
         const seatWind = 27 + ((winner - dealerSeat + 4) % 4);
         const roundWind = 27 + Math.floor(kyoku / 4);
         const situ = inferSituational(round, winnerState, fromState, tsumo);
-        const doubleRiichi = inferDoubleRiichi(round, states, winnerState);
-        const ippatsu = inferIppatsu(round, states, winnerState, fromState, tsumo, situ);
+        const order = sequenceRound(round);
+        const doubleRiichi = inferDoubleRiichi(round, states, winnerState, order);
+        const ippatsu = inferIppatsu(round, states, winnerState, fromState, tsumo, situ, order);
         const firstTurn = inferFirstTurnYakuman(round, states, winnerState, tsumo);
         const kuitan = kuitanEnabled(rule);
 
