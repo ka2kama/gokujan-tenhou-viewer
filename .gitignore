@@ -1,6 +1,9 @@
 # 依存関係
 node_modules/
 
+# テスト成果物
+tests/output/
+
 # Wrangler
 .wrangler/
 .dev.vars

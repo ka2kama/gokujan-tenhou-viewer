@@ -57,7 +57,8 @@ gokujan-tenhou-viewer/
 │  ├─ index.html   … アプリ本体（HTML / CSS / JS を含む単一ファイル）
 │  ├─ img/         … 使い方のスクリーンショット
 │  └─ sample.json  … サンプル牌譜（12 局）
-├─ package.json    … wrangler と dev / deploy スクリプト
+├─ tests/          … 実ブラウザ検証スイート（Playwright）と検証用牌譜
+├─ package.json    … wrangler と dev / deploy / test スクリプト
 ├─ wrangler.jsonc  … Cloudflare Workers Static Assets の設定
 ├─ LICENSE
 └─ README.md
@@ -73,6 +74,18 @@ npm run dev
 ```
 
 Wrangler の開発サーバーが起動し、表示された URL でアプリを確認できます。
+
+### テスト
+
+実ブラウザ（Playwright）でアプリの主要動作を検証するスイートが `tests/` にあります。読み込み・局一覧・補完（役計算、条件付き補完、喰いタン既定値、一発の順序復元）・同名プレイヤーの番号付けなど 61 項目を、`tests/fixtures/` の実牌譜で検証します。
+
+```bash
+npm install
+npx playwright install chromium   # 初回のみ（ブラウザ未取得の場合）
+npm test                          # dev サーバーを自動起動して全スイート実行
+```
+
+公開サイトに対して実行する場合は `BASE=https://paifu.ka2kama.com/ npm test`。
 
 ### デプロイ
 
