@@ -7,7 +7,7 @@
   <meta name="description" content="極雀（旧 BigCoach）のAI対戦牌譜を、天鳳の牌譜ビューアで再生できる形式に変換・補完する非公式ツールです。" />
   <meta name="theme-color" content="#07101d" />
   <style>
-    /* Component styles are ordered to follow the document structure. */
+    /* スタイルは文書構造の出現順に並べている。 */
 
     :root {
       color-scheme: dark;
@@ -903,13 +903,13 @@
     (() => {
       "use strict";
 
-      // Single-file architecture: parse source JSON -> reconstruct game state ->
-      // normalize Tenhou result records -> render round actions. All user data stays
-      // client-side; only the generated Tenhou URL is opened on explicit user action.
+      // 単一ファイル構成: 牌譜 JSON の解析 → 対局状態の再構成 → 天鳳互換への
+      // 結果正規化 → 局一覧の描画。ユーザーデータはすべてクライアント内に留まり、
+      // 外部を開くのは明示的な操作による天鳳 URL のみ。
 
 
       // -------------------------------------------------------------------------
-      // Configuration and DOM references
+      // 設定と DOM 参照
       // -------------------------------------------------------------------------
 
       const PLAYER_COUNT = 4;
@@ -955,7 +955,7 @@
       }
 
       // -----------------------------------------------------------------------
-      // General UI helpers
+      // 汎用 UI ヘルパー
       // -----------------------------------------------------------------------
 
       function setStatus(message, type = "") {
@@ -990,7 +990,7 @@
       }
 
       // -----------------------------------------------------------------------
-      // Tile and meld utilities
+      // 牌と鳴きのユーティリティ
       // -----------------------------------------------------------------------
 
       function normalizeTileCode(code) {
@@ -1123,16 +1123,20 @@
       }
 
       // -----------------------------------------------------------------------
-      // Log reconstruction
+      // 牌譜の再構成
       // -----------------------------------------------------------------------
 
+      // 局データからプレイヤーのフィールド（配牌・ツモ・打牌）を取り出す。
+      // レイアウトは [メタ, 点数, ドラ, 裏ドラ, (配牌・ツモ・打牌) × 4 人, 結果]。
+      function playerField(round, seat, field) {
+        const value = round?.[ROUND_FIELD.PLAYER_DATA_START + seat * ROUND_FIELD.PLAYER_DATA_WIDTH + field];
+        return Array.isArray(value) ? value : [];
+      }
+
       function reconstructPlayer(round, seat) {
-        const base = ROUND_FIELD.PLAYER_DATA_START + seat * ROUND_FIELD.PLAYER_DATA_WIDTH;
-        const initial = Array.isArray(round?.[base + PLAYER_FIELD.INITIAL])
-          ? [...round[base + PLAYER_FIELD.INITIAL]]
-          : [];
-        const draws = Array.isArray(round?.[base + PLAYER_FIELD.DRAWS]) ? round[base + PLAYER_FIELD.DRAWS] : [];
-        const discards = Array.isArray(round?.[base + PLAYER_FIELD.DISCARDS]) ? round[base + PLAYER_FIELD.DISCARDS] : [];
+        const initial = [...playerField(round, seat, PLAYER_FIELD.INITIAL)];
+        const draws = playerField(round, seat, PLAYER_FIELD.DRAWS);
+        const discards = playerField(round, seat, PLAYER_FIELD.DISCARDS);
         const hand = [...initial];
         const melds = [];
         const discardHistory = [];
@@ -1194,7 +1198,7 @@
       }
 
       // -----------------------------------------------------------------------
-      // Hand decomposition and yaku evaluation
+      // 和了形の分解と役計算
       // -----------------------------------------------------------------------
 
       function countsFromIndices(indices) {
@@ -1613,16 +1617,14 @@
       }
 
       // -----------------------------------------------------------------------
-      // Action-history inference (ippatsu, double-riichi, situational yaku)
+      // 行動履歴からの推定（一発・両立直・状況役）
       // -----------------------------------------------------------------------
 
       function countNumericDraws(round) {
-        let n = 0;
-        for (let seat = 0; seat < 4; seat++) {
-          const draws = round?.[5 + seat * 3];
-          if (Array.isArray(draws)) n += draws.filter(x => typeof x === 'number').length;
-        }
-        return n;
+        return SEATS.reduce(
+          (n, seat) => n + playerField(round, seat, PLAYER_FIELD.DRAWS).filter(x => typeof x === 'number').length,
+          0
+        );
       }
 
       function turnOrderOffset(round, seat) {
@@ -1641,11 +1643,24 @@
       // eventTurnKey の「index = 巡目」近似では順序判定（一発・両立直）を誤る。
       // 戻り値は `席:行index:部(0=ツモ側,1=打牌側)` → 大域連番 の Map。
       // 復元に失敗・曖昧な場合は null を返し、呼び出し側は近似にフォールバックする。
+      // sequenceRound のキー種別: 行の前半（ツモ・鳴き）と後半（打牌・槓宣言）
+      const SEQ_PART = Object.freeze({ DRAW: 0, DISCARD: 1 });
+
+      // 大域順序 Map からイベントの連番を引く。見つからなければ null。
+      function sequencedAt(order, seat, part, index) {
+        return order.get(`${seat}:${index}:${part}`) ?? null;
+      }
+
+      // meld イベントの部: どちらの配列に記録されていたか（source）で決まる
+      function meldSeqPart(event) {
+        return event.source === 'draw' ? SEQ_PART.DRAW : SEQ_PART.DISCARD;
+      }
+
       function sequenceRound(round) {
         const kyoku = Number(round?.[ROUND_FIELD.META]?.[0] || 0);
         const dealer = ((kyoku % 4) + 4) % 4;
-        const draws = SEATS.map(s => Array.isArray(round?.[5 + s * 3]) ? round[5 + s * 3] : []);
-        const discards = SEATS.map(s => Array.isArray(round?.[6 + s * 3]) ? round[6 + s * 3] : []);
+        const draws = SEATS.map(s => playerField(round, s, PLAYER_FIELD.DRAWS));
+        const discards = SEATS.map(s => playerField(round, s, PLAYER_FIELD.DISCARDS));
         const cursor = [0, 0, 0, 0];
         const lastDrawn = [null, null, null, null];
         const order = new Map();
@@ -1670,13 +1685,13 @@
           if (hasDraw) {
             const tok = draws[s][i];
             if (typeof tok === 'number') lastDrawn[s] = tok;
-            order.set(`${s}:${i}:0`, seq++);
+            order.set(`${s}:${i}:${SEQ_PART.DRAW}`, seq++);
           }
           if (!hasDiscard) return order; // ツモ和了など、打牌なしで終局
 
           const tok = discards[s][i];
           cursor[s] = i + 1;
-          order.set(`${s}:${i}:1`, seq++);
+          order.set(`${s}:${i}:${SEQ_PART.DISCARD}`, seq++);
 
           if (typeof tok === 'string' && !/^r\d{2}$/.test(tok)) {
             continue; // 打牌の代わりの槓宣言（暗槓・加槓）→ 嶺上ツモで同じ手番が続く
@@ -1710,12 +1725,49 @@
         return null; // ガード超過 = 復元失敗
       }
 
-      // Ippatsu lasts from the riichi discard until the player's next turn,
-      // and is cancelled by any chi/pon/kan.  Tenhou's per-player arrays do
-      // not carry a single global timestamp, so we map each local turn index
-      // onto dealer-relative turn order.  Calls are represented as meld events
-      // in the caller's next turn slot, which is sufficient for this one-turn
-      // window.  Rinshan/chankan are rejected separately below.
+      // 大域順序による一発の厳密判定。判定に必要なキーが引けない場合は null を
+      // 返し、呼び出し側は近似判定へフォールバックする。
+      function ippatsuByOrder(order, states, winnerState, fromState, tsumo, situ) {
+        const riichiSeq = sequencedAt(order, winnerState.seat, SEQ_PART.DISCARD, winnerState.riichiDiscardIndex);
+        let winSeq = null;
+        let robbed = null;
+        if (tsumo) {
+          const lastDraw = [...winnerState.events].reverse().find(e => e.kind === 'draw');
+          if (lastDraw) winSeq = sequencedAt(order, winnerState.seat, SEQ_PART.DRAW, lastDraw.index);
+        } else if (fromState) {
+          if (situ?.chankan) {
+            robbed = [...fromState.events].reverse().find(e => e.kind === 'meld' && e.meld?.added);
+            if (robbed) winSeq = sequencedAt(order, fromState.seat, meldSeqPart(robbed), robbed.index);
+          } else {
+            const winDiscard = [...fromState.events].reverse().find(e => e.kind === 'discard');
+            if (winDiscard) winSeq = sequencedAt(order, fromState.seat, SEQ_PART.DISCARD, winDiscard.index);
+          }
+        }
+        if (riichiSeq == null || winSeq == null) return null;
+        if (winSeq <= riichiSeq) return false;
+
+        // 立直後、和了までに自分のツモ番が挟まっていたら一発ではない
+        for (const e of winnerState.events) {
+          if (e.kind !== 'draw') continue;
+          const sq = sequencedAt(order, winnerState.seat, SEQ_PART.DRAW, e.index);
+          if (sq != null && sq > riichiSeq && sq < winSeq) return false;
+        }
+        // 立直と和了の間に成立した鳴き・槓は一発を消す（槍槓の対象槓は除く）
+        for (const state of states) {
+          for (const e of state.events) {
+            if (e.kind !== 'meld' || e === robbed) continue;
+            const sq = sequencedAt(order, state.seat, meldSeqPart(e), e.index);
+            if (sq != null && sq > riichiSeq && sq <= winSeq) return false;
+          }
+        }
+        return true;
+      }
+
+      // 一発: 立直宣言の打牌から自分の次のツモ番まで有効で、間にチー・ポン・
+      // カンが成立すると消える。判定は sequenceRound の大域順序を第一とし、
+      // 復元できない牌譜では「ローカル index ≒ 巡目」の近似にフォールバックする
+      // （近似は鳴きで index がずれるため偽陰性がありうる）。
+      // 嶺上・槍槓の除外は別途行う。
       function inferIppatsu(round, states, winnerState, fromState, tsumo, situ, order) {
         if (!winnerState?.riichi || winnerState.riichiDiscardIndex < 0) return false;
         if (situ?.rinshan) return false;
@@ -1725,43 +1777,10 @@
         );
         if (!riichiEvent) return false;
 
-        // 大域順序が復元できている場合は、近似ではなく実際の進行順で判定する
+        // 大域順序が復元できていれば、近似ではなく実際の進行順で判定する
         if (order) {
-          const seqOf = (seat, part, index) => order.get(`${seat}:${index}:${part}`);
-          const riichiSeq = seqOf(winnerState.seat, 1, winnerState.riichiDiscardIndex);
-          let winSeq = null;
-          let robbed = null;
-          if (tsumo) {
-            const lastDraw = [...winnerState.events].reverse().find(e => e.kind === 'draw');
-            if (lastDraw) winSeq = seqOf(winnerState.seat, 0, lastDraw.index);
-          } else if (fromState) {
-            if (situ?.chankan) {
-              robbed = [...fromState.events].reverse().find(e => e.kind === 'meld' && e.meld?.added);
-              if (robbed) winSeq = seqOf(fromState.seat, robbed.source === 'draw' ? 0 : 1, robbed.index);
-            } else {
-              const winDiscard = [...fromState.events].reverse().find(e => e.kind === 'discard');
-              if (winDiscard) winSeq = seqOf(fromState.seat, 1, winDiscard.index);
-            }
-          }
-          if (riichiSeq != null && winSeq != null) {
-            if (winSeq <= riichiSeq) return false;
-            // 立直後、和了までに自分のツモ番が挟まっていたら一発ではない
-            for (const e of winnerState.events) {
-              if (e.kind !== 'draw') continue;
-              const sq = seqOf(winnerState.seat, 0, e.index);
-              if (sq != null && sq > riichiSeq && sq < winSeq) return false;
-            }
-            // 立直と和了の間に成立した鳴き・槓は一発を消す（槍槓の対象槓は除く）
-            for (const state of states) {
-              for (const e of state.events) {
-                if (e.kind !== 'meld' || e === robbed) continue;
-                const sq = seqOf(state.seat, e.source === 'draw' ? 0 : 1, e.index);
-                if (sq != null && sq > riichiSeq && sq <= winSeq) return false;
-              }
-            }
-            return true;
-          }
-          // 必要なキーが引けない場合のみ、以降の近似判定へフォールバック
+          const exact = ippatsuByOrder(order, states, winnerState, fromState, tsumo, situ);
+          if (exact != null) return exact;
         }
 
         const riichiKey = eventTurnKey(round, winnerState.seat, riichiEvent);
@@ -1774,7 +1793,7 @@
         if (tsumo) {
           const lastDraw = [...winnerState.events].reverse().find(e => e.kind === 'draw');
           if (!lastDraw) return false;
-          // Ippatsu tsumo must be the very next own draw after declaring riichi.
+          // 一発ツモは、立直宣言の直後の自分のツモに限る。
           if (lastDraw.index !== winnerState.riichiDiscardIndex + 1) return false;
           if (winnerState.discards.length !== winnerState.riichiDiscardIndex + 1) return false;
           winKey = eventTurnKey(round, winnerState.seat, lastDraw);
@@ -1789,7 +1808,7 @@
             if (!winDiscard) return false;
             winKey = eventTurnKey(round, fromState.seat, winDiscard);
           }
-          // Ron/chankan must happen before the riichi player's next turn begins.
+          // ロン・槍槓は、立直者の次のツモ番が来る前でなければならない。
           if (winKey == null || winKey <= riichiKey || winKey >= nextWinnerTurnKey) return false;
           const postRiichiDraw = winnerState.events.find(
             e => e.kind === 'draw' && e.index > winnerState.riichiDiscardIndex
@@ -1799,9 +1818,9 @@
 
         if (winKey == null || winKey <= riichiKey) return false;
 
-        // Any completed call/kan between riichi and the win cancels ippatsu.
-        // When the winning event itself is a robbed added-kan, that kan has not
-        // completed yet, so ippatsu and chankan may coexist (Tenhou rule).
+        // 立直と和了の間に成立した鳴き・槓は一発を消す。和了イベント自体が
+        // 槍槓の対象（加槓）である場合、その槓は未成立なので一発と槍槓は
+        // 両立しうる（天鳳ルール）。
         for (const state of states) {
           for (const e of state.events) {
             if (e.kind !== 'meld' || e === robbedKanEvent) continue;
@@ -1812,33 +1831,37 @@
         return true;
       }
 
+      // 大域順序による両立直の厳密判定。キーが引けない場合は null を返す。
+      function doubleRiichiByOrder(order, states, winnerState) {
+        const riichiSeq = sequencedAt(order, winnerState.seat, SEQ_PART.DISCARD, 0);
+        if (riichiSeq == null) return null;
+        for (const state of states) {
+          for (const e of state.events) {
+            if (e.kind !== 'meld') continue;
+            const sq = sequencedAt(order, state.seat, meldSeqPart(e), e.index);
+            if (sq == null || sq < riichiSeq) return false;
+          }
+        }
+        return true;
+      }
+
       function inferDoubleRiichi(round, states, winnerState, order) {
         if (!winnerState?.riichi || winnerState.riichiDiscardIndex !== 0) return false;
         const riichiEvent = winnerState.events.find(e => e.kind === 'discard' && e.riichi);
         if (!riichiEvent) return false;
 
-        // 大域順序が復元できている場合は実際の進行順で判定する
+        // 大域順序が復元できていれば、近似ではなく実際の進行順で判定する
         if (order) {
-          const seqOf = (seat, part, index) => order.get(`${seat}:${index}:${part}`);
-          const riichiSeq = seqOf(winnerState.seat, 1, 0);
-          if (riichiSeq != null) {
-            for (const state of states) {
-              for (const e of state.events) {
-                if (e.kind !== 'meld') continue;
-                const sq = seqOf(state.seat, e.source === 'draw' ? 0 : 1, e.index);
-                if (sq == null || sq < riichiSeq) return false;
-              }
-            }
-            return true;
-          }
+          const exact = doubleRiichiByOrder(order, states, winnerState);
+          if (exact != null) return exact;
         }
 
         const riichiKey = eventTurnKey(round, winnerState.seat, riichiEvent);
         if (riichiKey == null) return false;
 
-        // Calls before the declaration invalidate double riichi.  The per-player
-        // JSON is not a perfect global event stream, so ambiguous first-cycle calls
-        // are treated conservatively: false negatives are preferable to inventing 2 han.
+        // 宣言より前に鳴きがあれば両立直は不成立。per-player 配列は完全な
+        // 大域イベント列ではないため、初巡の順序が曖昧な鳴きは保守的に扱う
+        // （2 飜を捏造するより偽陰性のほうがよい）。
         for (const state of states) {
           for (const e of state.events) {
             if (e.kind !== 'meld') continue;
@@ -1859,8 +1882,8 @@
         const hasOwnDiscard = winnerState.events.some(e => e.kind === 'discard');
         if (!lastDraw || lastDraw.index !== 0 || hasOwnDiscard) return { tenhou: false, chiihou: false };
 
-        // If the round ends on the winner's first draw, any meld recorded in the
-        // round necessarily occurred before that win and disqualifies 天和/地和.
+        // 勝者の第一ツモで終局しているなら、記録されている鳴きは必ずその前に
+        // 起きているため、天和・地和は不成立。
         const anyMeld = states.some(state => state.events.some(e => e.kind === 'meld'));
         if (anyMeld) return { tenhou: false, chiihou: false };
 
@@ -1885,7 +1908,7 @@
         let chankan = false;
         if (!tsumo && fromState) {
           const e = [...fromState.events].reverse().find(x => x.kind === 'meld' || x.kind === 'discard');
-          // Tenhou allows chankan on an added kan (kakan); ordinary open kan is not robbable.
+          // 天鳳ルールでは槍槓は加槓に対してのみ成立し、大明槓は対象外。
           if (e?.kind === 'meld' && e.meld?.type === 'kan' && e.meld?.added) chankan = true;
         }
         return {
@@ -1951,8 +1974,8 @@
         };
 
         const aka = countRawRed(concealedRaw, winnerState.melds);
-        const dora = countDora(allIndices, Array.isArray(round?.[ROUND_FIELD.DORA_INDICATORS]) ? round[2] : []);
-        const ura = winnerState.riichi ? countDora(allIndices, Array.isArray(round?.[ROUND_FIELD.URA_INDICATORS]) ? round[3] : []) : 0;
+        const dora = countDora(allIndices, Array.isArray(round?.[ROUND_FIELD.DORA_INDICATORS]) ? round[ROUND_FIELD.DORA_INDICATORS] : []);
+        const ura = winnerState.riichi ? countDora(allIndices, Array.isArray(round?.[ROUND_FIELD.URA_INDICATORS]) ? round[ROUND_FIELD.URA_INDICATORS] : []) : 0;
         const bonuses = { dora, ura, aka };
 
         const candidates = [];
@@ -1973,7 +1996,7 @@
         for (const c of candidates) {
           const yakuman = yakumanCount(c);
           const han = totalHan(c, bonuses);
-          if (yakuman === 0 && c.yaku.reduce((s,y)=>s+y.han,0) === 0) continue; // dora-only is not a legal win
+          if (yakuman === 0 && c.yaku.reduce((s,y)=>s+y.han,0) === 0) continue; // ドラのみでは和了できない
           const score = scoreFromHanFu(han, c.fu, yakuman, winner === dealerSeat, tsumo);
           const match = scoreMatchesTarget(score, target);
           const rank = (match ? 1e9 : 0) + yakuman * 1e7 + han * 1e5 + (100 - c.fu);
@@ -2002,7 +2025,7 @@
       }
 
       // -----------------------------------------------------------------------
-      // Abortive-draw inference
+      // 途中流局の推定
       // -----------------------------------------------------------------------
 
       function allRoundEvents(round, states) {
@@ -2026,9 +2049,9 @@
         return kinds.size;
       }
 
-      // Abortive-draw inference is intentionally conservative.  We only replace
-      // a generic ["流局", ...] when the abbreviated action log itself proves a
-      // Tenhou abortive-draw condition.  Explicit source labels are preserved.
+      // 途中流局の推定は意図的に保守的にしている。省略された行動ログ自体が
+      // 天鳳の途中流局条件を証明できる場合に限り、汎用の ["流局", ...] を
+      // 置き換える。元から明示的なラベルがある場合はそのまま維持する。
       function inferAbortiveDraw(round) {
         const result = round?.[ROUND_FIELD.RESULT];
         if (!Array.isArray(result) || result[0] !== '流局') return null;
@@ -2040,10 +2063,9 @@
         const drawEvents = events.filter(e => e.kind === 'draw');
         const lastKey = events.length ? events[events.length - 1].key : -1;
 
-        // 九種九牌: no chi/pon/kan/ankan has occurred, and the declaring player
-        // ends the round on their first draw with 9+ distinct terminals/honors.
-        // Requiring that draw to be the final recorded action avoids guessing on
-        // truncated or otherwise malformed logs.
+        // 九種九牌: チー・ポン・カン（暗槓含む）が一切なく、宣言者が自身の
+        // 第一ツモで終局し、幺九牌が 9 種以上あること。そのツモが記録上の最終
+        // 行動であることを要求し、途中で切れた・壊れた牌譜への推測を避ける。
         if (meldEvents.length === 0) {
           for (const state of states) {
             const ownDraws = state.events.filter(e => e.kind === 'draw');
@@ -2062,8 +2084,8 @@
           }
         }
 
-        // 四風連打: the round ends in the first cycle, every player has exactly
-        // one discard, all four are the same wind, and no meld has occurred.
+        // 四風連打: 初巡で終局し、全員の打牌がちょうど 1 枚、4 枚とも同じ
+        // 風牌で、鳴きが発生していないこと。
         if (meldEvents.length === 0 && states.every(state => {
           const ds = state.events.filter(e => e.kind === 'discard');
           const zs = state.events.filter(e => e.kind === 'draw');
@@ -2078,9 +2100,8 @@
           }
         }
 
-        // 四家立直: all four riichi declarations are present and the last
-        // recorded action is the fourth declaration.  Open melds are impossible
-        // for a riichi player; closed kans are allowed and do not invalidate this.
+        // 四家立直: 4 人分の立直宣言が揃い、記録上の最終行動が 4 件目の宣言で
+        // あること。立直者に副露は不可能だが、暗槓は許されるため無効化しない。
         if (states.every(state => state.riichi) &&
             !states.some(state => state.melds.some(m => m.open))) {
           const riichiEvents = states.map(state => {
@@ -2100,9 +2121,8 @@
           }
         }
 
-        // 四槓散了: exactly four completed kans exist and at least two players
-        // made them.  Four kans by one player is 四槓子, so it must not be
-        // rewritten as an abortive draw.
+        // 四槓散了: 成立した槓がちょうど 4 つで、2 人以上によるものであること。
+        // 1 人での 4 槓は四槓子なので、途中流局に書き換えてはならない。
         const kanEvents = meldEvents.filter(e => e.meld?.type === 'kan');
         if (kanEvents.length === 4 && new Set(kanEvents.map(e => e.seat)).size >= 2) {
           return {
@@ -2111,15 +2131,14 @@
           };
         }
 
-        // 三家和了 is deliberately not inferred.  The per-player action arrays
-        // can prove that three players *could* ron the final discard, but they do
-        // not preserve enough response information to prove that all three
-        // actually declared ron.  Inventing it would be worse than leaving 流局.
+        // 三家和了は意図的に推定しない。per-player 配列からは 3 人が最終打牌を
+        // ロン「できた」ことまでは証明できても、実際に 3 人ともロンを宣言した
+        // ことは証明できない。捏造するより流局のまま残すほうがよい。
         return null;
       }
 
       // -----------------------------------------------------------------------
-      // Tenhou-compatible result normalization
+      // 天鳳互換への結果正規化
       // -----------------------------------------------------------------------
 
       function normalizeRoundForTenhou(round, rule) {
@@ -2214,7 +2233,7 @@
       }
 
       // -----------------------------------------------------------------------
-      // Presentation helpers and rendering
+      // 表示ヘルパーと描画
       // -----------------------------------------------------------------------
 
       function startingSeatLabel(index) {
@@ -2446,7 +2465,7 @@
       }
 
       // -----------------------------------------------------------------------
-      // Input validation and event wiring
+      // 入力検証とイベント配線
       // -----------------------------------------------------------------------
 
       // 同名プレイヤーが複数いる場合（極雀では対戦 AI が全員「AI」になる）、
