@@ -44,7 +44,7 @@ await page.click("#sampleBtn");
 await page.waitForSelector("#resultPanel:not([hidden])", { timeout: 8000 });
 const sampleText = await page.locator("#rounds").innerText();
 const sampleWarns = (sampleText.match(/役計算と点差が一致しない/g) || []).length;
-record("5. サンプル 12 局も警告ゼロを維持", sampleWarns === 0, `警告 ${sampleWarns} 件`);
+record("5. サンプル牌譜も警告ゼロを維持", sampleWarns === 0, `警告 ${sampleWarns} 件`);
 
 record("6. コンソールエラーなし", consoleErrors.length === 0, consoleErrors.join(" / ") || "");
 await browser.close();

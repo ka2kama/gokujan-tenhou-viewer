@@ -56,7 +56,7 @@ gokujan-tenhou-viewer/
 ├─ public/
 │  ├─ index.html   … アプリ本体（HTML / CSS / JS を含む単一ファイル）
 │  ├─ img/         … 使い方のスクリーンショット
-│  └─ sample.json  … サンプル牌譜（12 局）
+│  └─ sample.json  … サンプル牌譜（14 局）
 ├─ tests/          … 実ブラウザ検証スイート（Playwright）と検証用牌譜
 ├─ package.json    … wrangler と dev / deploy / test スクリプト
 ├─ wrangler.jsonc  … Cloudflare Workers Static Assets の設定
