@@ -2096,13 +2096,12 @@
         return SEAT_LABELS[index] ?? `席${index + 1}`;
       }
 
-      // 席は対局開始時の席で固定表示する（視点セレクタと同じ基準）。
-      // 局ごとの風で表示すると、同名プレイヤー（AI が複数など）を局をまたいで
-      // 追跡できなくなるため。親は局名と得点表記（∀）から読み取れる。
+      // 和了者は名前だけで表示する。同名プレイヤーの識別は disambiguateNames の
+      // 番号付けが担い、番号と席の対応は視点セレクタで確認できる。
+      // 親は局名と得点表記（∀）から読み取れる。名前がない牌譜のみ席で代替する。
       function playerRoundLabel(names, playerIndex) {
         const playerName = String(names?.[playerIndex] ?? "").trim();
-        const seat = startingSeatLabel(playerIndex);
-        return playerName ? `${playerName}（${seat}）` : seat;
+        return playerName || startingSeatLabel(playerIndex);
       }
 
       function defaultViewpoint(names) {
@@ -2325,6 +2324,27 @@
       // Input validation and event wiring
       // -----------------------------------------------------------------------
 
+      // 同名プレイヤーが複数いる場合（極雀では対戦 AI が全員「AI」になる）、
+      // 起家順に丸数字を付けて識別できるようにする。表示・ビューア再生・
+      // 補完後 JSON のすべてで一貫させるため、読み込み直後に一度だけ適用する。
+      // 全員固有名の牌譜には影響しない。
+      function disambiguateNames(names) {
+        const marks = ["①", "②", "③", "④"];
+        const counts = new Map();
+        for (const name of names) {
+          const key = String(name ?? "").trim();
+          counts.set(key, (counts.get(key) ?? 0) + 1);
+        }
+        const used = new Map();
+        return names.map((name) => {
+          const key = String(name ?? "").trim();
+          if (!key || (counts.get(key) ?? 0) < 2) return name;
+          const index = used.get(key) ?? 0;
+          used.set(key, index + 1);
+          return `${key} ${marks[index] ?? `(${index + 1})`}`;
+        });
+      }
+
       function parseJson(raw) {
         try {
           return JSON.parse(raw);
@@ -2352,6 +2372,7 @@
           if (!raw) throw new InputValidationError("牌譜JSONを貼り付けてください。");
 
           const data = validate(parseJson(raw));
+          if (Array.isArray(data.name)) data.name = disambiguateNames(data.name);
           render(data);
           setStatus(`${data.log.length}局を読み込みました。再生する局を選んでください。`, "ok");
           setTimeout(() => resultPanel.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
