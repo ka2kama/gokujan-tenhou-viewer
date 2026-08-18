@@ -12,7 +12,7 @@
 
 ## 機能
 
-- 牌譜 JSON の貼り付け読み込み・ファイル読み込み（`Ctrl / ⌘ + Enter` でも実行）
+- 牌譜 JSON の貼り付け読み込み・ファイル読み込み（`Ctrl / ⌘ + Enter` でも実行）・サンプル牌譜のワンクリック読み込み
 - 局一覧の表示（局名・本場・和了 / 流局・和了者と対局開始時の席・ツモ / ロン・得点・役・補完の有無）
 - 再生視点の固定（指定しない / 東家 / 南家 / 西家 / 北家）。極雀の牌譜でユーザー自身を表す `玩家` が一意にいる場合は、その対局者を初期選択します
 - 天鳳の牌譜ビューアを新しいタブで開く / 再生 URL のコピー / 補完後 JSON のコピー
@@ -54,7 +54,8 @@
 gokujan-tenhou-viewer/
 ├─ public/
 │  ├─ index.html   … アプリ本体（HTML / CSS / JS を含む単一ファイル）
-│  └─ img/         … 使い方のスクリーンショット
+│  ├─ img/         … 使い方のスクリーンショット
+│  └─ sample.json  … サンプル牌譜（12 局）
 ├─ package.json    … wrangler と dev / deploy スクリプト
 ├─ wrangler.jsonc  … Cloudflare Workers Static Assets の設定
 ├─ LICENSE

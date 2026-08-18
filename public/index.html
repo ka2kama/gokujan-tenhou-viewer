@@ -850,6 +850,7 @@
           <button class="primary" id="parseBtn">読み込む</button>
           <label class="file-label" for="fileInput">ファイルから読み込む</label>
           <input id="fileInput" type="file" accept=".json,application/json,text/plain" />
+          <button class="ghost" id="sampleBtn">サンプルで試す</button>
           <button class="ghost" id="clearBtn">クリア</button>
         </div>
         <span class="shortcut">Ctrl / ⌘ + Enter</span>
@@ -943,6 +944,7 @@
       const jsonInput = getRequiredElement("#jsonInput");
       const parseBtn = getRequiredElement("#parseBtn");
       const fileInput = getRequiredElement("#fileInput");
+      const sampleBtn = getRequiredElement("#sampleBtn");
       const clearBtn = getRequiredElement("#clearBtn");
       const statusEl = getRequiredElement("#status");
       const roundsEl = getRequiredElement("#rounds");
@@ -2400,6 +2402,18 @@
         resetResultView();
         setStatus("");
         jsonInput.focus();
+      });
+
+      sampleBtn.addEventListener("click", async () => {
+        try {
+          const response = await fetch("sample.json");
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          jsonInput.value = await response.text();
+          parseInput();
+        } catch (error) {
+          console.error("Failed to load sample game record", error);
+          setStatus("サンプル牌譜を読み込めませんでした。通信環境を確認してもう一度お試しください。", "error");
+        }
       });
     })();
   </script>
