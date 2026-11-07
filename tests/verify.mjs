@@ -1,7 +1,7 @@
 // 引継書 §13「ローカル確認」チェックリストの自動検証。
 // 実ブラウザ（Playwright Chromium, headless）で wrangler dev を叩く。
 import { chromium } from "@playwright/test";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 
 const BASE = process.env.BASE ?? "http://127.0.0.1:8787/";
 const FIXTURE = readFileSync("fixtures/basic.json", "utf8");
@@ -178,6 +178,45 @@ record(
 );
 
 await viewpoint.selectOption("");
+
+// --- 役名が天鳳の正式表記に揃っている（NAGA は未知の役名を拒否する） ---
+// 天鳳牌譜エディタ（cdn.tenhou.net/6/）が持つ役名一覧。ドラ類は飜数が可変のため別判定。
+const TENHOU_YAKU = new Set([
+  "門前清自摸和(1飜)", "立直(1飜)", "一発(1飜)", "槍槓(1飜)", "嶺上開花(1飜)", "海底摸月(1飜)", "河底撈魚(1飜)",
+  "平和(1飜)", "断幺九(1飜)", "一盃口(1飜)",
+  "自風 東(1飜)", "自風 南(1飜)", "自風 西(1飜)", "自風 北(1飜)",
+  "場風 東(1飜)", "場風 南(1飜)", "場風 西(1飜)", "場風 北(1飜)",
+  "役牌 白(1飜)", "役牌 發(1飜)", "役牌 中(1飜)",
+  "両立直(2飜)", "七対子(1飜)", "七対子(2飜)", "混全帯幺九(1飜)", "混全帯幺九(2飜)",
+  "一気通貫(1飜)", "一気通貫(2飜)", "三色同順(1飜)", "三色同順(2飜)", "三色同刻(2飜)", "三槓子(2飜)",
+  "対々和(2飜)", "三暗刻(2飜)", "小三元(2飜)", "混老頭(2飜)", "二盃口(3飜)",
+  "純全帯幺九(2飜)", "純全帯幺九(3飜)", "混一色(2飜)", "混一色(3飜)", "清一色(5飜)", "清一色(6飜)",
+  "天和(役満)", "地和(役満)", "大三元(役満)", "四暗刻(役満)", "四暗刻単騎(役満)", "字一色(役満)",
+  "緑一色(役満)", "清老頭(役満)", "九蓮宝燈(役満)", "純正九蓮宝燈(役満)", "国士無双(役満)",
+  "国士無双１３面(役満)", "大四喜(役満)", "小四喜(役満)", "四槓子(役満)",
+]);
+const isTenhouYaku = (y) => TENHOU_YAKU.has(y) || /^(ドラ|裏ドラ|赤ドラ)\(\d+飜\)$/.test(y);
+const unknownYaku = [];
+for (const file of ["../public/sample.json", ...readdirSync("fixtures").map((f) => `fixtures/${f}`)]) {
+  await page.click("#clearBtn");
+  await page.fill("#jsonInput", readFileSync(file, "utf8"));
+  await page.click("#parseBtn");
+  await page.waitForSelector("#resultPanel:not([hidden])", { timeout: 5000 });
+  await page.locator("#gameSummary button:has-text('NAGAで解析')").click();
+  const lines = (await page.evaluate(() => window.__copied)).at(-1).split("\n");
+  for (const line of lines) {
+    const result = JSON.parse(line.slice(NAGA_PREFIX.length)).log[0][16];
+    if (result?.[0] !== "和了") continue;
+    for (let i = 2; i < result.length; i += 2) {
+      for (const y of result[i].slice(4)) if (!isTenhouYaku(y)) unknownYaku.push(`${file}: ${y}`);
+    }
+  }
+}
+record("役名. 全牌譜の役名が天鳳の正式表記", unknownYaku.length === 0, unknownYaku.join(" / ") || "未知の役名なし");
+await page.click("#clearBtn");
+await page.fill("#jsonInput", FIXTURE);
+await page.click("#parseBtn");
+await page.waitForSelector("#resultPanel:not([hidden])", { timeout: 5000 });
 
 // --- 引継書 §7「元点差との不一致」の 2 経路 ---
 const MISMATCH_NOTE = "役計算と点差が一致しないため";

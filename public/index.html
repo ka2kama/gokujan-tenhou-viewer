@@ -1394,7 +1394,7 @@
 
         const tripLike = groups.filter(g => g.kind === 'triplet' || g.kind === 'kan');
         const dragonTiles = [31,32,33];
-        for (const d of dragonTiles) if (tripLike.some(g => g.tile === d)) addYaku(yaku, d === 31 ? '白' : d === 32 ? '發' : '中', 1);
+        for (const d of dragonTiles) if (tripLike.some(g => g.tile === d)) addYaku(yaku, `役牌 ${d === 31 ? '白' : d === 32 ? '發' : '中'}`, 1);
         if (tripLike.some(g => g.tile === ctx.seatWind)) addYaku(yaku, `自風 ${windName(ctx.seatWind)}`, 1);
         if (tripLike.some(g => g.tile === ctx.roundWind)) addYaku(yaku, `場風 ${windName(ctx.roundWind)}`, 1);
 
@@ -1523,7 +1523,7 @@
       function evaluateSpecial(ctx) {
         const out = [];
         if (ctx.melds.length === 0 && isKokushi(ctx.concealedIndices)) {
-          const name = isKokushi13Wait(ctx.concealedIndices, ctx.winTile) ? '国士無双13面' : '国士無双';
+          const name = isKokushi13Wait(ctx.concealedIndices, ctx.winTile) ? '国士無双１３面' : '国士無双';
           const yakuman = [{ name, count: 1 }];
           if (ctx.tenhou) yakuman.push({ name: '天和', count: 1 });
           if (ctx.chiihou) yakuman.push({ name: '地和', count: 1 });
