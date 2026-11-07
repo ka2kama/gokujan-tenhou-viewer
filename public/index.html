@@ -413,7 +413,8 @@
       white-space: nowrap;
     }
 
-    .viewpoint-setting {
+    .viewpoint-setting,
+    .game-play {
       grid-column: 1 / -1;
       display: flex;
       align-items: center;
@@ -459,6 +460,8 @@
     }
 
     .viewpoint-select:hover { border-color: rgba(85, 216, 227, .32); }
+
+    .game-play .round-actions { flex: 0 0 auto; }
 
 
     .rounds { display: grid; gap: 10px; }
@@ -622,7 +625,7 @@
       z-index: 20;
       top: calc(100% + 7px);
       right: 0;
-      width: 190px;
+      width: 210px;
       padding: 6px;
       border: 1px solid rgba(130, 169, 199, .18);
       border-radius: 12px;
@@ -778,14 +781,15 @@
       .shortcut { display: block; margin-top: 9px; text-align: center; }
       .game-summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
       .game-summary-count { margin-top: 0; }
-      .viewpoint-setting { display: block; }
+      .viewpoint-setting, .game-play { display: block; }
       .viewpoint-select { width: 100%; min-width: 0; margin-top: 9px; }
+      .game-play .round-actions { margin-top: 9px; }
       .round { padding: 14px; border-radius: 14px; }
       .accuracy-item { grid-template-columns: 1fr; gap: 7px; }
       .accuracy-tag { justify-self: start; }
       .round-actions { display: grid; grid-template-columns: 1fr auto; }
       .round-actions .primary { width: 100%; }
-      .menu-popover { right: 0; width: min(210px, calc(100vw - 48px)); }
+      .menu-popover { right: 0; width: min(230px, calc(100vw - 48px)); }
       .footer { display: block; }
     }
 
@@ -2226,6 +2230,15 @@
         };
       }
 
+      // 天鳳ビューアは log に複数局を持つ JSON をそのまま受け付け、
+      // 「前局」「次局」で局を移動できる。各局は局単位と同じ補完結果を使う。
+      function buildGameData(builtRounds) {
+        return {
+          ...builtRounds[0].data,
+          log: builtRounds.map((built) => built.data.log[0])
+        };
+      }
+
       function makeViewerUrl(roundData) {
         const compact = JSON.stringify(roundData);
         const viewpoint = Number.isInteger(selectedViewpointSeat) ? `?tw=${selectedViewpointSeat}` : "";
@@ -2264,6 +2277,49 @@
         } catch {
           prompt("コピーしてください", text);
         }
+      }
+
+      // 「天鳳で開く」と、URL / 補完後 JSON のコピーを持つ操作列。
+      // 局カードと全局再生で共通に使う。
+      function createViewerActions(viewerData, labels) {
+        const actions = document.createElement("div");
+        actions.className = "round-actions";
+
+        const openBtn = document.createElement("button");
+        openBtn.className = "primary";
+        openBtn.textContent = labels.open;
+        openBtn.addEventListener("click", () => {
+          window.open(makeViewerUrl(viewerData), "_blank", "noopener,noreferrer");
+        });
+
+        const menu = document.createElement("details");
+        menu.className = "more-menu";
+        const menuSummary = document.createElement("summary");
+        menuSummary.setAttribute("aria-label", "その他の操作");
+        menuSummary.textContent = "•••";
+        const popover = document.createElement("div");
+        popover.className = "menu-popover";
+
+        const copyBtn = document.createElement("button");
+        copyBtn.type = "button";
+        copyBtn.textContent = labels.copyUrl;
+        copyBtn.addEventListener("click", async () => {
+          await copyText(makeViewerUrl(viewerData), copyBtn);
+          setTimeout(() => { menu.open = false; }, 250);
+        });
+
+        const copyJsonBtn = document.createElement("button");
+        copyJsonBtn.type = "button";
+        copyJsonBtn.textContent = labels.copyJson;
+        copyJsonBtn.addEventListener("click", async () => {
+          await copyText(JSON.stringify(viewerData), copyJsonBtn);
+          setTimeout(() => { menu.open = false; }, 250);
+        });
+
+        popover.append(copyBtn, copyJsonBtn);
+        menu.append(menuSummary, popover);
+        actions.append(openBtn, menu);
+        return actions;
       }
 
       function render(data) {
@@ -2327,7 +2383,26 @@
         });
         viewpointSetting.append(viewpointCopy, viewpointSelect);
 
-        gameSummaryEl.append(gameMain, gameCount, viewpointSetting);
+        const builtRounds = rounds.map((_, i) => buildRoundData(data, i));
+
+        const gamePlay = document.createElement("div");
+        gamePlay.className = "game-play";
+        const gamePlayCopy = document.createElement("div");
+        gamePlayCopy.className = "viewpoint-copy";
+        const gamePlayLabel = document.createElement("span");
+        gamePlayLabel.className = "viewpoint-label";
+        gamePlayLabel.textContent = "通しで再生";
+        const gamePlayHelp = document.createElement("span");
+        gamePlayHelp.className = "viewpoint-help";
+        gamePlayHelp.textContent = "全局をまとめて開きます。天鳳ビューアの「前局」「次局」で局を移動できます。";
+        gamePlayCopy.append(gamePlayLabel, gamePlayHelp);
+        gamePlay.append(gamePlayCopy, createViewerActions(buildGameData(builtRounds), {
+          open: "全局を天鳳で開く",
+          copyUrl: "全局の再生URLをコピー",
+          copyJson: "全局の補完後JSONをコピー"
+        }));
+
+        gameSummaryEl.append(gameMain, gameCount, viewpointSetting, gamePlay);
 
         roundsEl.innerHTML = "";
 
@@ -2338,7 +2413,7 @@
           const riichiSticks = Number(meta[2] ?? 0);
 
           const scores = Array.isArray(round?.[ROUND_FIELD.SCORES]) ? round[1] : [];
-          const built = buildRoundData(data, i);
+          const built = builtRounds[i];
           const roundData = built.data;
 
           const card = document.createElement("article");
@@ -2422,43 +2497,11 @@
 
           if (built.notes.length) content.title = built.notes.join("\n");
 
-          const actions = document.createElement("div");
-          actions.className = "round-actions";
-
-          const openBtn = document.createElement("button");
-          openBtn.className = "primary";
-          openBtn.textContent = "天鳳で開く";
-          openBtn.addEventListener("click", () => {
-            window.open(makeViewerUrl(roundData), "_blank", "noopener,noreferrer");
+          const actions = createViewerActions(roundData, {
+            open: "天鳳で開く",
+            copyUrl: "再生URLをコピー",
+            copyJson: "補完後のJSONをコピー"
           });
-
-          const menu = document.createElement("details");
-          menu.className = "more-menu";
-          const menuSummary = document.createElement("summary");
-          menuSummary.setAttribute("aria-label", "その他の操作");
-          menuSummary.textContent = "•••";
-          const popover = document.createElement("div");
-          popover.className = "menu-popover";
-
-          const copyBtn = document.createElement("button");
-          copyBtn.type = "button";
-          copyBtn.textContent = "再生URLをコピー";
-          copyBtn.addEventListener("click", async () => {
-            await copyText(makeViewerUrl(roundData), copyBtn);
-            setTimeout(() => { menu.open = false; }, 250);
-          });
-
-          const copyJsonBtn = document.createElement("button");
-          copyJsonBtn.type = "button";
-          copyJsonBtn.textContent = "補完後のJSONをコピー";
-          copyJsonBtn.addEventListener("click", async () => {
-            await copyText(JSON.stringify(roundData), copyJsonBtn);
-            setTimeout(() => { menu.open = false; }, 250);
-          });
-
-          popover.append(copyBtn, copyJsonBtn);
-          menu.append(menuSummary, popover);
-          actions.append(openBtn, menu);
           card.append(heading, content, actions);
           roundsEl.appendChild(card);
         });

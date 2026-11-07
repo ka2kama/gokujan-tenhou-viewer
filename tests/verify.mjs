@@ -19,6 +19,10 @@ const context = await browser.newContext({ viewport: { width: 1280, height: 900 
 await context.addInitScript(() => {
   window.__openedUrls = [];
   window.open = (url) => { window.__openedUrls.push(url); return null; };
+  window.__copied = [];
+  Object.defineProperty(navigator, "clipboard", {
+    value: { writeText: async (text) => { window.__copied.push(text); } },
+  });
 });
 
 const page = await context.newPage();
@@ -95,7 +99,7 @@ record("8c. 「玩家」が初期選択される", initialViewpoint === "2", `va
 
 // 視点=指定しない のときの URL
 await viewpoint.selectOption("");
-await page.locator("button:has-text('天鳳で開く')").first().click();
+await page.locator("#rounds button:has-text('天鳳で開く')").first().click();
 let urls = await page.evaluate(() => window.__openedUrls);
 const urlNoTw = urls.at(-1);
 record("10. 天鳳 URL に #json= が入る", urlNoTw.includes("#json="), urlNoTw.slice(0, 60) + "…");
@@ -104,7 +108,7 @@ record("11. 「天鳳で開く」が動く", urlNoTw.startsWith("https://tenhou.
 
 // 視点=北家(3) のときの URL
 await viewpoint.selectOption("3");
-await page.locator("button:has-text('天鳳で開く')").first().click();
+await page.locator("#rounds button:has-text('天鳳で開く')").first().click();
 urls = await page.evaluate(() => window.__openedUrls);
 const urlTw = urls.at(-1);
 record("9. 視点指定 URL に ?tw=N が入る", urlTw.includes("?tw=3") && urlTw.includes("#json="), urlTw.slice(0, 48) + "…");
@@ -115,7 +119,7 @@ record("9b. URL 内の JSON が復元できる", Array.isArray(decoded.log) && d
 
 // --- 補完の検証: 短縮和了が天鳳形式へ展開されているか ---
 await viewpoint.selectOption("");
-await page.locator("button:has-text('天鳳で開く')").first().click();
+await page.locator("#rounds button:has-text('天鳳で開く')").first().click();
 urls = await page.evaluate(() => window.__openedUrls);
 const round1 = JSON.parse(decodeURIComponent(urls.at(-1).split("#json=")[1])).log[0];
 const agari = round1[16];
@@ -125,6 +129,33 @@ record(
   `detail 長=${agari?.[2]?.length}`
 );
 record("補完B. 元の点差が保持される", JSON.stringify(agari[1]) === JSON.stringify([-3900, 0, 3900, 0]), JSON.stringify(agari[1]));
+
+// --- 全局の通し再生: 局単位と同じ補完結果を 1 つの log にまとめる ---
+const roundCount = JSON.parse(FIXTURE).log.length;
+const roundLogs = [];
+for (let i = 0; i < roundCount; i++) {
+  await page.locator("#rounds button:has-text('天鳳で開く')").nth(i).click();
+  const url = (await page.evaluate(() => window.__openedUrls)).at(-1);
+  roundLogs.push(JSON.parse(decodeURIComponent(url.split("#json=")[1])).log[0]);
+}
+await viewpoint.selectOption("3");
+await page.locator("#gameSummary button:has-text('全局を天鳳で開く')").click();
+const gameUrl = (await page.evaluate(() => window.__openedUrls)).at(-1);
+const gameData = JSON.parse(decodeURIComponent(gameUrl.split("#json=")[1]));
+record("全局A. 全局の URL に全局が入る", gameData.log?.length === roundCount, `log 長=${gameData.log?.length} / 局数=${roundCount}`);
+record("全局B. 各局が局単位の補完結果と一致する", JSON.stringify(gameData.log) === JSON.stringify(roundLogs));
+record("全局C. 全局の URL にも視点指定が入る", gameUrl.startsWith("https://tenhou.net/5/?tw=3#json="), gameUrl.slice(0, 48) + "…");
+
+await page.locator("#gameSummary .more-menu summary").click();
+await page.locator("#gameSummary button:has-text('全局の再生URLをコピー')").click();
+// コピー後にメニューが自動で閉じるのを待ってから開き直す
+await page.waitForSelector("#gameSummary .more-menu:not([open])", { state: "attached" });
+await page.locator("#gameSummary .more-menu summary").click();
+await page.locator("#gameSummary button:has-text('全局の補完後JSONをコピー')").click();
+const copied = await page.evaluate(() => window.__copied);
+record("全局D. 全局の再生 URL をまとめてコピーできる", copied.at(-2) === gameUrl);
+record("全局E. 全局の補完後 JSON をまとめてコピーできる", copied.at(-1) === JSON.stringify(gameData));
+await viewpoint.selectOption("");
 
 // --- 引継書 §7「元点差との不一致」の 2 経路 ---
 const MISMATCH_NOTE = "役計算と点差が一致しないため";
