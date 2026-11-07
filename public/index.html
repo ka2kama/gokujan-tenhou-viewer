@@ -462,6 +462,15 @@
     .viewpoint-select:hover { border-color: rgba(85, 216, 227, .32); }
 
     .game-play .round-actions { flex: 0 0 auto; }
+    .summary-status {
+      display: block;
+      margin-top: 3px;
+      color: var(--accent-strong);
+      font-size: .72rem;
+      font-weight: 700;
+      line-height: 1.45;
+    }
+    .summary-status:empty { display: none; }
 
 
     .rounds { display: grid; gap: 10px; }
@@ -919,6 +928,8 @@
       const PLAYER_COUNT = 4;
       const TILE_TYPE_COUNT = 34;
       const TENHOU_VIEWER_BASE_URL = "https://tenhou.net/5/";
+      const TENHOU_EDITOR_URL_PREFIX = "https://tenhou.net/6/#json=";
+      const NAGA_CUSTOM_ORDER_URL = "https://naga.dmv.nico/naga_report/order_form/?show_tab=1";
       const SEAT_LABELS = Object.freeze(["東家", "南家", "西家", "北家"]);
       const WIND_LABELS = Object.freeze(["東", "南", "西", "北"]);
       const SEATS = Object.freeze([0, 1, 2, 3]);
@@ -2245,6 +2256,15 @@
         return `${TENHOU_VIEWER_BASE_URL}${viewpoint}#json=${encodeURIComponent(compact)}`;
       }
 
+      // NAGA のカスタム解析は、天鳳牌譜エディタ形式の URL を 1 行 1 局で受け付け、
+      // 全行をまとめて送ると 1 つのレポートになる。JSON は URL エンコードしない
+      // 形が既存ツールで実績のある書式。視点（?tw=）は解析に不要なので付けない。
+      function makeNagaInput(builtRounds) {
+        return builtRounds
+          .map((built) => `${TENHOU_EDITOR_URL_PREFIX}${JSON.stringify(built.data)}`)
+          .join("\n");
+      }
+
       // -----------------------------------------------------------------------
       // 表示ヘルパーと描画
       // -----------------------------------------------------------------------
@@ -2277,6 +2297,46 @@
         } catch {
           prompt("コピーしてください", text);
         }
+      }
+
+      // 他サイトの入力欄には書き込めないため、クリップボードへコピーしてから
+      // NAGA を開き、貼り付けはユーザーに任せる。コピーは自ページにフォーカスが
+      // あるうちに済ませる必要があるので、新しいタブより先に行う。
+      function createNagaActions(builtRounds, statusEl) {
+        const actions = document.createElement("div");
+        actions.className = "round-actions";
+        const nagaBtn = document.createElement("button");
+        nagaBtn.className = "primary";
+        nagaBtn.textContent = "NAGAで解析";
+        nagaBtn.addEventListener("click", async () => {
+          const text = makeNagaInput(builtRounds);
+          try {
+            await navigator.clipboard.writeText(text);
+            statusEl.textContent = `${builtRounds.length}局分をコピーしました。NAGAの入力欄に貼り付けてください。`;
+          } catch {
+            prompt("コピーしてNAGAの入力欄に貼り付けてください", text);
+          }
+          window.open(NAGA_CUSTOM_ORDER_URL, "_blank", "noopener,noreferrer");
+        });
+        actions.appendChild(nagaBtn);
+        return actions;
+      }
+
+      // 対局サマリー内の 1 行（見出し・説明・右側の操作）。
+      function createSummaryRow(labelText, helpText, actionsEl) {
+        const row = document.createElement("div");
+        row.className = "game-play";
+        const copy = document.createElement("div");
+        copy.className = "viewpoint-copy";
+        const label = document.createElement("span");
+        label.className = "viewpoint-label";
+        label.textContent = labelText;
+        const help = document.createElement("span");
+        help.className = "viewpoint-help";
+        help.textContent = helpText;
+        copy.append(label, help);
+        row.append(copy, actionsEl);
+        return { row, help };
       }
 
       // 「天鳳で開く」と、URL / 補完後 JSON のコピーを持つ操作列。
@@ -2385,24 +2445,27 @@
 
         const builtRounds = rounds.map((_, i) => buildRoundData(data, i));
 
-        const gamePlay = document.createElement("div");
-        gamePlay.className = "game-play";
-        const gamePlayCopy = document.createElement("div");
-        gamePlayCopy.className = "viewpoint-copy";
-        const gamePlayLabel = document.createElement("span");
-        gamePlayLabel.className = "viewpoint-label";
-        gamePlayLabel.textContent = "通しで再生";
-        const gamePlayHelp = document.createElement("span");
-        gamePlayHelp.className = "viewpoint-help";
-        gamePlayHelp.textContent = "全局をまとめて開きます。天鳳ビューアの「前局」「次局」で局を移動できます。";
-        gamePlayCopy.append(gamePlayLabel, gamePlayHelp);
-        gamePlay.append(gamePlayCopy, createViewerActions(buildGameData(builtRounds), {
-          open: "全局を天鳳で開く",
-          copyUrl: "全局の再生URLをコピー",
-          copyJson: "全局の補完後JSONをコピー"
-        }));
+        const gamePlay = createSummaryRow(
+          "通しで再生",
+          "全局をまとめて開きます。天鳳ビューアの「前局」「次局」で局を移動できます。",
+          createViewerActions(buildGameData(builtRounds), {
+            open: "全局を天鳳で開く",
+            copyUrl: "全局の再生URLをコピー",
+            copyJson: "全局の補完後JSONをコピー"
+          })
+        );
 
-        gameSummaryEl.append(gameMain, gameCount, viewpointSetting, gamePlay);
+        const nagaStatus = document.createElement("span");
+        nagaStatus.className = "summary-status";
+        nagaStatus.setAttribute("role", "status");
+        const nagaRow = createSummaryRow(
+          "NAGAで解析",
+          "全局をNAGAのカスタム解析用にコピーし、解析画面を開きます。入力欄に貼り付けて解析してください。",
+          createNagaActions(builtRounds, nagaStatus)
+        );
+        nagaRow.help.after(nagaStatus);
+
+        gameSummaryEl.append(gameMain, gameCount, viewpointSetting, gamePlay.row, nagaRow.row);
 
         roundsEl.innerHTML = "";
 

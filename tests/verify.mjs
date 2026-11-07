@@ -155,6 +155,28 @@ await page.locator("#gameSummary button:has-text('全局の補完後JSONをコ�
 const copied = await page.evaluate(() => window.__copied);
 record("全局D. 全局の再生 URL をまとめてコピーできる", copied.at(-2) === gameUrl);
 record("全局E. 全局の補完後 JSON をまとめてコピーできる", copied.at(-1) === JSON.stringify(gameData));
+
+// --- NAGA カスタム解析: 1 行 1 局の天鳳牌譜エディタ URL をコピーして NAGA を開く ---
+await page.locator("#gameSummary button:has-text('NAGAで解析')").click();
+const nagaText = (await page.evaluate(() => window.__copied)).at(-1);
+const nagaLines = nagaText.split("\n");
+const NAGA_PREFIX = "https://tenhou.net/6/#json=";
+record("NAGA-A. 1 行 1 局でコピーされる", nagaLines.length === roundCount, `行数=${nagaLines.length} / 局数=${roundCount}`);
+record("NAGA-B. 各行が天鳳牌譜エディタ形式の URL", nagaLines.every((l) => l.startsWith(NAGA_PREFIX)));
+const nagaLogs = nagaLines.map((l) => JSON.parse(l.slice(NAGA_PREFIX.length)));
+record(
+  "NAGA-C. 各行が局単位の補完結果と一致する",
+  nagaLogs.every((d, i) => d.log.length === 1 && JSON.stringify(d.log[0]) === JSON.stringify(roundLogs[i]))
+);
+record(
+  "NAGA-D. NAGA のカスタム解析画面が開く",
+  (await page.evaluate(() => window.__openedUrls)).at(-1) === "https://naga.dmv.nico/naga_report/order_form/?show_tab=1"
+);
+record(
+  "NAGA-E. コピー完了が表示される",
+  (await page.locator("#gameSummary .summary-status").innerText()).includes(`${roundCount}局分をコピーしました`)
+);
+
 await viewpoint.selectOption("");
 
 // --- 引継書 §7「元点差との不一致」の 2 経路 ---
